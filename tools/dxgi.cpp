@@ -4,9 +4,11 @@
  */
 #define WINVER 0x0A00
 #include <d3dcommon.h>
+#include <Windows.h>
 #include <dxgi.h>
 
 #include <iostream>
+#include <unordered_map>
 
 #include "src/utility.h"
 
@@ -24,8 +26,29 @@ namespace dxgi {
 
 }  // namespace dxgi
 
+
+std::unordered_map<std::wstring, std::wstring> getMonitorDisplayToNameMap() {
+    std::unordered_map<std::wstring, std::wstring> result;
+    DISPLAY_DEVICEW dd;
+    dd.cb = sizeof(dd);
+    int deviceIndex = 0;
+    while(EnumDisplayDevicesW(0, deviceIndex, &dd, 0))
+    {
+        std::wstring deviceName = dd.DeviceName;
+        while(EnumDisplayDevicesW(deviceName.c_str(), 0, &dd, 0))
+        {
+            result[deviceName] = dd.DeviceString;
+            break;
+        }
+        ++deviceIndex;
+    }
+    return result;
+} 
+
 int
 main(int argc, char *argv[]) {
+  auto displays = getMonitorDisplayToNameMap();
+  
   HRESULT status;
 
   // Set ourselves as per-monitor DPI aware for accurate resolution values on High DPI systems
@@ -38,6 +61,7 @@ main(int argc, char *argv[]) {
     std::cout << "Failed to create DXGIFactory1 [0x"sv << util::hex(status).to_string_view() << ']' << std::endl;
     return -1;
   }
+  
 
   dxgi::adapter_t::pointer adapter_p {};
   for (int x = 0; factory->EnumAdapters1(x, &adapter_p) != DXGI_ERROR_NOT_FOUND; ++x) {
@@ -69,8 +93,15 @@ main(int argc, char *argv[]) {
       auto width = desc.DesktopCoordinates.right - desc.DesktopCoordinates.left;
       auto height = desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top;
 
+
+      auto it = displays.find(std::wstring(desc.DeviceName));
+
       std::wcout
         << L"    Output Name       : "sv << desc.DeviceName << std::endl;
+      if(it != displays.end()) {
+        std::wcout
+          << L"    Monitor Name      : "sv << it->second << std::endl;
+      }
       std::cout
         << "    AttachedToDesktop : "sv << (desc.AttachedToDesktop ? "yes"sv : "no"sv) << std::endl
         << "    Resolution        : "sv << width << 'x' << height << std::endl

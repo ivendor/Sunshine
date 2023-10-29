@@ -26,6 +26,26 @@ namespace platf {
 namespace platf::dxgi {
   namespace bp = boost::process;
 
+  namespace {    
+  std::unordered_map<std::wstring, std::wstring> getMonitorDisplayToNameMap() {
+      std::unordered_map<std::wstring, std::wstring> result;
+      DISPLAY_DEVICEW dd;
+      dd.cb = sizeof(dd);
+      int deviceIndex = 0;
+      while(EnumDisplayDevicesW(0, deviceIndex, &dd, 0))
+      {
+          std::wstring deviceName = dd.DeviceName;
+          while(EnumDisplayDevicesW(deviceName.c_str(), 0, &dd, 0))
+          {
+              result[deviceName] = dd.DeviceString;
+              break;
+          }
+          ++deviceIndex;
+      }
+      return result;
+  } 
+  }
+
   capture_e
   duplication_t::next_frame(DXGI_OUTDUPL_FRAME_INFO &frame_info, std::chrono::milliseconds timeout, resource_t::pointer *res_p) {
     auto capture_status = release_frame();
@@ -430,6 +450,8 @@ namespace platf::dxgi {
     auto adapter_name = converter.from_bytes(config::video.adapter_name);
     auto output_name = converter.from_bytes(display_name);
 
+    auto displayNamesMap = getMonitorDisplayToNameMap();
+
     adapter_t::pointer adapter_p;
     for (int tries = 0; tries < 2; ++tries) {
       for (int x = 0; factory->EnumAdapters1(x, &adapter_p) != DXGI_ERROR_NOT_FOUND; ++x) {
@@ -449,7 +471,9 @@ namespace platf::dxgi {
           DXGI_OUTPUT_DESC desc;
           output_tmp->GetDesc(&desc);
 
-          if (!output_name.empty() && desc.DeviceName != output_name) {
+          auto displayIt = displayNamesMap.find(desc.DeviceName);
+
+          if (!output_name.empty() && desc.DeviceName != output_name && (displayIt == displayNamesMap.end() || displayIt->second != output_name )) {
             continue;
           }
 
